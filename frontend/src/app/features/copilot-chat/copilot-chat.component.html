@@ -1,0 +1,22 @@
+<div class="glass-card chat-container">
+  <div class="chat-header">
+    <h3><span class="icon">🤖</span> AI Copilot</h3>
+    <p class="text-muted">Ask anything about your patients or clinical guidelines</p>
+  </div>
+  
+  <div class="chat-messages" #scrollContainer>
+    <div class="message" *ngFor="let msg of messages$ | async" [ngClass]="msg.sender">
+      <div class="avatar">{{ msg.sender === 'ai' ? '🤖' : 'Dr' }}</div>
+      <div class="message-content">
+        <div class="bubble">{{ msg.text }}</div>
+        <app-service-status *ngIf="msg.sender === 'ai' && msg.sourceService" [source]="msg.sourceService"></app-service-status>
+      </div>
+    </div>
+  </div>
+  
+  <div class="chat-input-area">
+    <input type="text" class="glass-input" placeholder="Type your clinical question..." 
+           [(ngModel)]="newMessage" (keyup.enter)="sendMessage()" />
+    <button class="btn-primary" (click)="sendMessage()">Send</button>
+  </div>
+</div>

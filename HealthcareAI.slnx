@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/gateway/">
+    <Project Path="gateway/ApiGateway.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/McpClient.Api/McpClient.Api.csproj" />
+    <Project Path="src/Orchestrator.Api/Orchestrator.Api.csproj" />
+    <Project Path="src/RagService.Api/RagService.Api.csproj" />
+    <Project Path="src/Shared.Contracts/Shared.Contracts.csproj" />
+    <Project Path="src/Shared.Infrastructure/Shared.Infrastructure.csproj" />
+    <Project Path="src/WorkflowEngine.Api/WorkflowEngine.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/McpClient.Tests/McpClient.Tests.csproj" />
+    <Project Path="tests/RagService.Tests/RagService.Tests.csproj" />
+    <Project Path="tests/WorkflowEngine.Tests/WorkflowEngine.Tests.csproj" />
+  </Folder>
+</Solution>
