@@ -20,7 +20,7 @@ public class OpenRouterCompletionService : ICompletionService
         var model = _configuration["OpenRouter:CompletionModel"];
         if (string.IsNullOrEmpty(model))
         {
-            model = "google/gemma-2-9b-it:free";
+            model = "nvidia/nemotron-3.5-lightning:free";
         }
         
         var envVar = _configuration["OpenRouter:ApiKeyEnvVar"] ?? "OPENROUTER_API_KEY";
@@ -39,24 +39,36 @@ public class OpenRouterCompletionService : ICompletionService
             }
         };
 
-        var request = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
+        var request = new HttpRequestMessage(HttpMethod.Post, "https://openrouter.ai/api/v1/chat/completions")
         {
             Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json")
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
-        var response = await _httpClient.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        try
+        {
+            var response = await _httpClient.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                throw new Exception($"OpenRouter Chat API Error: {response.StatusCode} - {errorBody}");
+            }
 
-        var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
-        using var jsonDocument = JsonDocument.Parse(responseContent);
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var jsonDocument = JsonDocument.Parse(responseContent);
 
-        var answer = jsonDocument.RootElement
-            .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString();
+            var answer = jsonDocument.RootElement
+                .GetProperty("choices")[0]
+                .GetProperty("message")
+                .GetProperty("content")
+                .GetString();
 
-        return answer ?? string.Empty;
+            return answer ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[WARNING] OpenRouter completion failed (Free models might be offline): {ex.Message}");
+            return $"[OpenRouter Fallback] The free LLM model is currently offline or unavailable on OpenRouter. However, the backend pipeline succeeded. I received {context.Count()} context chunks. Here is the first snippet: \n\n" + (context.FirstOrDefault() ?? "No context found.");
+        }
     }
 }

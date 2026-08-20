@@ -18,7 +18,7 @@ var app = builder.Build();
 app.UseCors("AllowAll");
 
 // Map YARP routes
-app.MapReverseProxy();
+app.MapReverseProxy().RequireCors("AllowAll");
 
 app.MapGet("/", () => "API Gateway is running!");
 

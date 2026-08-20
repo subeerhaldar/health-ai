@@ -5,11 +5,11 @@ using OpenAI;
 
 class Program {
     static async Task Main() {
-        var apiKey = "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";
+        var apiKey = Environment.GetEnvironmentVariable("OPENROUTER_API_KEY") ?? "";
         var options = new OpenAIClientOptions { Endpoint = new Uri("https://openrouter.ai/api/") };
         var openAIClient = new OpenAIClient(new System.ClientModel.ApiKeyCredential(apiKey), options);
         var kernelBuilder = Kernel.CreateBuilder();
-        kernelBuilder.AddOpenAIChatCompletion("google/gemma-2-9b-it:free", openAIClient);
+        kernelBuilder.AddOpenAIChatCompletion("nvidia/nemotron-3.5-lightning:free", openAIClient);
         var kernel = kernelBuilder.Build();
         try {
             var result = await kernel.InvokePromptAsync("hi");
