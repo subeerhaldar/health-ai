@@ -54,9 +54,20 @@ graph TD
 
 ### Infrastructure & Data
 - **Docker & Docker Compose** (Container orchestration)
-- **PostgreSQL + pgvector** (Relational & Vector database for RAG)
+- **PostgreSQL + pgvector** (Relational & Vector database for RAG & Workflows)
 - **RabbitMQ** (Message broker for MassTransit Sagas)
-- **OpenRouter** (Unified LLM access to `google/gemma-2-9b-it:free`)
+- **OpenRouter** (Unified LLM access with model `nvidia/nemotron-3.5-lightning:free`)
+
+---
+
+## 🔐 Environment & Secret Configuration
+
+To prevent sensitive credentials and API keys from leaking to Git, secrets are stored in a local `.env` file (which is git-ignored) and dynamically injected into Docker containers at runtime. 
+
+Non-sensitive configuration defaults (such as model choices and endpoints) are maintained in `appsettings.json` files for each microservice:
+- **Orchestrator**: Configured in [src/Orchestrator.Api/appsettings.json](file:///d:/Code/health-ai/src/Orchestrator.Api/appsettings.json) (`CompletionModel`, `BaseUrl`).
+- **RAG Service**: Configured in [src/RagService.Api/appsettings.json](file:///d:/Code/health-ai/src/RagService.Api/appsettings.json) (`EmbeddingModel`, `CompletionModel`).
+- **Workflow Engine**: Configured in [src/WorkflowEngine.Api/appsettings.json](file:///d:/Code/health-ai/src/WorkflowEngine.Api/appsettings.json).
 
 ---
 
@@ -64,17 +75,19 @@ graph TD
 
 ### Prerequisites
 - Docker & Docker Compose installed
-- Node.js (v18+) and Angular CLI (optional, for local frontend dev)
 - An OpenRouter API Key (Free tier works!)
 
-### 1. Configure the API Key
-Open the `docker-compose.yml` file and locate the `orchestrator-api` service. Replace the placeholder with your actual OpenRouter API key:
-```yaml
-  orchestrator-api:
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - OPENROUTER_API_KEY=sk-or-v1-YOUR-ACTUAL-KEY-HERE
+### 1. Create your Environment File (`.env`)
+Create a `.env` file in the project root directory (`/health-ai`) with your OpenRouter key and database credentials:
+
+```env
+OPENROUTER_API_KEY=sk-or-v1-YOUR-ACTUAL-KEY-HERE
+POSTGRES_USER=healthai
+POSTGRES_PASSWORD=password
+POSTGRES_DB=healthai_db
 ```
+
+> ⚠️ **Note**: Never commit `.env` to source control. It is already included in `.gitignore`.
 
 ### 2. Build and Spin Up the Containers
 From the root directory (`/health-ai`), run the following command to build the entire ecosystem and start the containers in the background:
@@ -100,6 +113,29 @@ Navigate to the **AI Copilot** tab in the UI.
 - **Test RAG**: Ask *"What are the latest clinical guidelines for treating hypertension?"*
 
 The Semantic Kernel will automatically deduce your intent, invoke the correct backend C# plugin, fetch the data, and stream the formatted response back to your screen with a color-coded status badge!
+
+---
+
+## 🗄️ Database Inspection (PostgreSQL / DBeaver)
+
+### Connect via DBeaver / GUI Client:
+- **Host**: `localhost` (or `127.0.0.1`)
+- **Port**: `5432`
+- **Database**: `healthai_db`
+- **Username**: `healthai`
+- **Password**: `password`
+
+### Query directly via Docker CLI:
+```bash
+# Interactive psql shell
+docker exec -it postgres psql -U healthai -d healthai_db
+
+# Query RAG document chunks
+docker exec -it postgres psql -U healthai -d healthai_db -c "SELECT \"Id\", \"Content\" FROM \"Documents\";"
+
+# Query Appointment Sagas
+docker exec -it postgres psql -U healthai -d healthai_db -c "SELECT * FROM \"AppointmentSagaState\";"
+```
 
 ---
 
