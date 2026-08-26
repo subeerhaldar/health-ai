@@ -73,12 +73,16 @@ app.MapHealthChecks("/health");
 app.MapPost("/workflows/appointment/start", async (StartAppointmentRequest request, IPublishEndpoint publishEndpoint) =>
 {
     var correlationId = Guid.NewGuid();
+    var utcRequestedDate = request.RequestedDate.Kind == DateTimeKind.Unspecified
+        ? DateTime.SpecifyKind(request.RequestedDate, DateTimeKind.Utc)
+        : request.RequestedDate.ToUniversalTime();
+
     await publishEndpoint.Publish<StartAppointmentScheduling>(new
     {
         CorrelationId = correlationId,
         PatientId = request.PatientId,
-        ProviderId = request.ProviderId,
-        RequestedDate = request.RequestedDate
+        ProviderId = string.IsNullOrWhiteSpace(request.ProviderId) ? "Dr. Smith" : request.ProviderId,
+        RequestedDate = utcRequestedDate
     });
     return Results.Accepted($"/workflows/{correlationId}/status", new { WorkflowId = correlationId });
 });
@@ -117,7 +121,7 @@ app.MapGet("/", () => "Workflow Engine API is running!");
 app.Run();
 
 // Request Models
-public record StartAppointmentRequest(string PatientId, string ProviderId, DateTime RequestedDate);
+public record StartAppointmentRequest(string PatientId, string? ProviderId, DateTime RequestedDate);
 public record StartPrescriptionRequest(string PatientId, string MedicationId);
 
 // Expose for testing
