@@ -20,7 +20,7 @@ public class WorkflowPlugin
     public async Task<string> ScheduleAppointmentAsync(
         [Description("The unique identifier of the patient (e.g. p-123 or JohnDoe123)")] string patientId,
         [Description("The provider or doctor ID/name (optional, default 'Dr. Smith')")] string? providerId,
-        [Description("The requested appointment date/time in YYYY-MM-DD format (e.g., 2026-08-31)")] string requestedDate)
+        [Description("The requested appointment date and time in ISO 8601 format (e.g., 2026-08-31T09:00:00Z) or YYYY-MM-DD format")] string requestedDate)
     {
         if (!DateTime.TryParse(requestedDate, out var parsedDate))
         {

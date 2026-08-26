@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Serilog;
 using Microsoft.SemanticKernel;
+using Orchestrator.Api.Agents;
 using Orchestrator.Api.Plugins;
 using Orchestrator.Api.Services;
 using Orchestrator.Api.Filters;
@@ -18,9 +19,11 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddHealthChecks();
 builder.Services.AddSignalR();
 
-// Track invoked plugins
+// Track invoked plugins and chat sessions
 builder.Services.AddScoped<PluginTracker>();
 builder.Services.AddTransient<IFunctionInvocationFilter, PluginTrackingFilter>();
+builder.Services.AddSingleton<SessionChatHistoryService>();
+builder.Services.AddTransient<HealthAgentFactory>();
 
 // HTTP Clients for Plugins
 builder.Services.AddHttpClient<PatientDataPlugin>();
