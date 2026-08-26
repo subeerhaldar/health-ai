@@ -43,130 +43,84 @@ The class diagram below details the underlying C# and Angular classes, interface
 
 ```mermaid
 classDiagram
-    namespace Frontend {
-        class ChatComponent {
-            +string userId
-            +string role
-            +sendMessage(string text)
-            +ngOnInit()
-        }
-        class ChatService {
-            +startConnection()
-            +sendMessage(string userId, string role, string message)
-            +onReceiveMessage(callback)
-        }
+    direction TB
+
+    class ChatComponent {
+        +string userId
+        +string role
+        +sendMessage(text)
+    }
+    class ChatHub {
+        +SendMessage(userId, role, message)
+    }
+    class SessionChatHistoryService {
+        +GetOrCreateHistory(sessionId, role, userId)
+    }
+    class HealthAgentFactory {
+        +CreatePatientRecordsAgent()
+        +CreateClinicalGuidelinesAgent()
+        +CreateWorkflowExecutionAgent()
+    }
+    class PatientDataPlugin {
+        +GetPatientRecordAsync(patientId)
+        +GetLabResultsAsync(patientId)
+    }
+    class ClinicalGuidelinesPlugin {
+        +QueryGuidelinesAsync(query)
+    }
+    class WorkflowPlugin {
+        +StartAppointmentWorkflowAsync(patientId, providerId, date)
     }
 
-    namespace Orchestrator_Api {
-        class ChatHub {
-            +SendMessage(string userId, string role, string message)
-        }
-        class PluginTrackingFilter {
-            +OnFunctionInvocationAsync(context, next)
-        }
-        class PluginTracker {
-            +string LastInvokedPlugin
-        }
-        class PatientDataPlugin {
-            +GetPatientRecordAsync(string patientId) string
-            +GetLabResultsAsync(string patientId) string
-        }
-        class ClinicalGuidelinesPlugin {
-            +QueryGuidelinesAsync(string query) string
-        }
-        class WorkflowPlugin {
-            +StartAppointmentWorkflowAsync(string patientId, string providerId, DateTime date) string
-            +StartPrescriptionRefillAsync(string patientId, string medicationId) string
-        }
+    ChatComponent --> ChatHub : SignalR
+    ChatHub --> SessionChatHistoryService : Session History
+    ChatHub --> HealthAgentFactory : Creates Agents
+    HealthAgentFactory --> PatientDataPlugin : Binds
+    HealthAgentFactory --> ClinicalGuidelinesPlugin : Binds
+    HealthAgentFactory --> WorkflowPlugin : Binds
+
+    class McpEndpoints {
+        +GetPatientRecordsEndpoint(patientId)
+        +GetLabResultsEndpoint(patientId)
     }
-
-    namespace RagService_Api {
-        class RagQueryEndpoint {
-            +MapPost_RagQuery(request)
-        }
-        class RagSearchService {
-            +RankDocumentsAsync(query, documents, topK)
-        }
-        class OpenRouterEmbeddingService {
-            +GenerateEmbeddingAsync(string text)
-        }
-        class OpenRouterCompletionService {
-            +GenerateAnswerAsync(string query, context)
-        }
-        class RagDbContext {
-            +DbSet_DocumentChunk Documents
-        }
-        class DocumentChunk {
-            +Guid Id
-            +string Content
-            +Vector Embedding
-        }
+    class EmrConnector {
+        +GetPatientRecordAsync(patientId)
     }
-
-    namespace McpClient_Api {
-        class McpEndpoints {
-            +GetPatientRecordsEndpoint(string patientId)
-            +GetLabResultsEndpoint(string patientId)
-        }
-        class HospitalSystemConnectorFactory {
-            +GetConnector(string systemName) IHospitalSystemConnector
-        }
-        class IHospitalSystemConnector {
-            <<interface>>
-            +GetPatientRecordAsync(string patientId)
-            +GetLabResultsAsync(string patientId)
-        }
-        class EmrConnector {
-            +GetPatientRecordAsync(string patientId)
-        }
-        class LisConnector {
-            +GetLabResultsAsync(string patientId)
-        }
+    class LisConnector {
+        +GetLabResultsAsync(patientId)
     }
-
-    namespace WorkflowEngine_Api {
-        class WorkflowEndpoints {
-            +StartAppointmentEndpoint(request)
-        }
-        class AppointmentSchedulingSaga {
-            +DefineState()
-        }
-        class AppointmentSagaState {
-            +Guid CorrelationId
-            +string CurrentState
-            +string PatientId
-        }
-        class WorkflowDbContext {
-            +DbSet_AppointmentSagaState AppointmentSagas
-        }
-    }
-
-    ChatComponent --> ChatService : uses
-    ChatService --> ChatHub : SignalR WebSockets
-    ChatHub --> PluginTracker : resets tracker
-    ChatHub ..> PluginTrackingFilter : intercepts invocation
-    PluginTrackingFilter --> PluginTracker : records plugin
-
-    ChatHub --> PatientDataPlugin : Semantic Kernel AutoInvoke
-    ChatHub --> ClinicalGuidelinesPlugin : Semantic Kernel AutoInvoke
-    ChatHub --> WorkflowPlugin : Semantic Kernel AutoInvoke
 
     PatientDataPlugin --> McpEndpoints : HTTP GET /mcp
-    McpEndpoints --> HospitalSystemConnectorFactory : resolves connector
-    HospitalSystemConnectorFactory --> IHospitalSystemConnector : returns stub
-    IHospitalSystemConnector <|.. EmrConnector : implements
-    IHospitalSystemConnector <|.. LisConnector : implements
+    McpEndpoints --> EmrConnector : EMR Data
+    McpEndpoints --> LisConnector : LIS Data
 
-    ClinicalGuidelinesPlugin --> RagQueryEndpoint : HTTP POST /rag/query
-    RagQueryEndpoint --> RagSearchService : ranks docs
-    RagSearchService --> OpenRouterEmbeddingService : generates embeddings
-    RagQueryEndpoint --> RagDbContext : fetches all docs
-    RagQueryEndpoint --> OpenRouterCompletionService : generates answer
-    RagDbContext --> DocumentChunk : contains pgvector
+    class RagQueryEndpoint {
+        +MapPost_RagQuery(request)
+    }
+    class RagSearchService {
+        +RankDocumentsAsync(query, documents, topK)
+    }
+    class RagDbContext {
+        +DbSet_DocumentChunk Documents
+    }
+
+    ClinicalGuidelinesPlugin --> RagQueryEndpoint : HTTP POST /rag
+    RagQueryEndpoint --> RagSearchService : Vector Search
+    RagSearchService --> RagDbContext : pgvector
+
+    class WorkflowEndpoints {
+        +StartAppointmentEndpoint(request)
+    }
+    class AppointmentSchedulingSaga {
+        +DefineState()
+    }
+    class WorkflowDbContext {
+        +DbSet_AppointmentSagaState AppointmentSagas
+    }
 
     WorkflowPlugin --> WorkflowEndpoints : HTTP POST /workflows
-    WorkflowEndpoints --> AppointmentSchedulingSaga : MassTransit Event
-    AppointmentSchedulingSaga --> WorkflowDbContext : persists saga state
+    WorkflowEndpoints --> AppointmentSchedulingSaga : MassTransit
+    AppointmentSchedulingSaga --> WorkflowDbContext : PostgreSQL
 ```
 
 ---
