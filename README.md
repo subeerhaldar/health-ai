@@ -36,6 +36,255 @@ graph TD
 
 ---
 
+## 🧩 System Class Diagram & Code Execution Flow
+
+### 1. Class Diagram & Component Structure
+The class diagram below details the underlying C# and Angular classes, interfaces, plugins, EF Core contexts, and how they connect across microservices:
+
+```mermaid
+classDiagram
+    namespace Frontend {
+        class ChatComponent {
+            +string userId
+            +string role
+            +sendMessage(string text)
+            +ngOnInit()
+        }
+        class ChatService {
+            +startConnection()
+            +sendMessage(string userId, string role, string message)
+            +onReceiveMessage(callback)
+        }
+    }
+
+    namespace Orchestrator_Api {
+        class ChatHub {
+            +SendMessage(string userId, string role, string message)
+        }
+        class PluginTrackingFilter {
+            +OnFunctionInvocationAsync(context, next)
+        }
+        class PluginTracker {
+            +string LastInvokedPlugin
+        }
+        class PatientDataPlugin {
+            +GetPatientRecordAsync(string patientId) string
+            +GetLabResultsAsync(string patientId) string
+        }
+        class ClinicalGuidelinesPlugin {
+            +QueryGuidelinesAsync(string query) string
+        }
+        class WorkflowPlugin {
+            +StartAppointmentWorkflowAsync(string patientId, string providerId, DateTime date) string
+            +StartPrescriptionRefillAsync(string patientId, string medicationId) string
+        }
+    }
+
+    namespace RagService_Api {
+        class RagQueryEndpoint {
+            +MapPost_RagQuery(request)
+        }
+        class RagSearchService {
+            +RankDocumentsAsync(query, documents, topK)
+        }
+        class OpenRouterEmbeddingService {
+            +GenerateEmbeddingAsync(string text)
+        }
+        class OpenRouterCompletionService {
+            +GenerateAnswerAsync(string query, context)
+        }
+        class RagDbContext {
+            +DbSet_DocumentChunk Documents
+        }
+        class DocumentChunk {
+            +Guid Id
+            +string Content
+            +Vector Embedding
+        }
+    }
+
+    namespace McpClient_Api {
+        class McpEndpoints {
+            +GetPatientRecordsEndpoint(string patientId)
+            +GetLabResultsEndpoint(string patientId)
+        }
+        class HospitalSystemConnectorFactory {
+            +GetConnector(string systemName) IHospitalSystemConnector
+        }
+        class IHospitalSystemConnector {
+            <<interface>>
+            +GetPatientRecordAsync(string patientId)
+            +GetLabResultsAsync(string patientId)
+        }
+        class EmrConnector {
+            +GetPatientRecordAsync(string patientId)
+        }
+        class LisConnector {
+            +GetLabResultsAsync(string patientId)
+        }
+    }
+
+    namespace WorkflowEngine_Api {
+        class WorkflowEndpoints {
+            +StartAppointmentEndpoint(request)
+        }
+        class AppointmentSchedulingSaga {
+            +DefineState()
+        }
+        class AppointmentSagaState {
+            +Guid CorrelationId
+            +string CurrentState
+            +string PatientId
+        }
+        class WorkflowDbContext {
+            +DbSet_AppointmentSagaState AppointmentSagas
+        }
+    }
+
+    ChatComponent --> ChatService : uses
+    ChatService --> ChatHub : SignalR WebSockets
+    ChatHub --> PluginTracker : resets tracker
+    ChatHub ..> PluginTrackingFilter : intercepts invocation
+    PluginTrackingFilter --> PluginTracker : records plugin
+
+    ChatHub --> PatientDataPlugin : Semantic Kernel AutoInvoke
+    ChatHub --> ClinicalGuidelinesPlugin : Semantic Kernel AutoInvoke
+    ChatHub --> WorkflowPlugin : Semantic Kernel AutoInvoke
+
+    PatientDataPlugin --> McpEndpoints : HTTP GET /mcp
+    McpEndpoints --> HospitalSystemConnectorFactory : resolves connector
+    HospitalSystemConnectorFactory --> IHospitalSystemConnector : returns stub
+    IHospitalSystemConnector <|.. EmrConnector : implements
+    IHospitalSystemConnector <|.. LisConnector : implements
+
+    ClinicalGuidelinesPlugin --> RagQueryEndpoint : HTTP POST /rag/query
+    RagQueryEndpoint --> RagSearchService : ranks docs
+    RagSearchService --> OpenRouterEmbeddingService : generates embeddings
+    RagQueryEndpoint --> RagDbContext : fetches all docs
+    RagQueryEndpoint --> OpenRouterCompletionService : generates answer
+    RagDbContext --> DocumentChunk : contains pgvector
+
+    WorkflowPlugin --> WorkflowEndpoints : HTTP POST /workflows
+    WorkflowEndpoints --> AppointmentSchedulingSaga : MassTransit Event
+    AppointmentSchedulingSaga --> WorkflowDbContext : persists saga state
+```
+
+---
+
+### 2. Contextual Execution Flows (By Prompt Scenario)
+
+Depending on the specific prompt entered by the user, Semantic Kernel dynamically deduces the intent and routes the execution flow through different microservice pathways:
+
+#### 🧪 Scenario A: Patient Records & Hospital Integration (MCP)
+**User Prompt:** *"What are John Doe's lab results?"*
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as Angular Chat UI
+    participant GW as YARP Gateway
+    participant HUB as Orchestrator ChatHub
+    participant SK as Semantic Kernel & Filter
+    participant MCP as PatientDataPlugin
+    participant SVC as McpClient.Api
+    participant LIS as LisConnector Stub
+
+    User->>UI: Types "What are John Doe's lab results?" & clicks Send
+    UI->>GW: SignalR WebSocket SendMessage(userId, role, message)
+    GW->>HUB: Forwards to /orchestrator/chatHub
+    HUB->>SK: InvokePromptAsync(prompt)
+    SK->>SK: LLM infers tool: PatientDataPlugin.GetLabResultsAsync("p-123")
+    SK->>SK: PluginTrackingFilter records "MCP"
+    SK->>MCP: Executes GetLabResultsAsync("p-123")
+    MCP->>SVC: HTTP GET http://mcpclient-api:8080/mcp/lab-results/p-123
+    SVC->>LIS: Aggregates lab records from LisConnector stub
+    LIS-->>SVC: Returns JsonObject (HbA1c: 6.8%, Cholesterol: 180)
+    SVC-->>MCP: Returns Aggregated JSON response
+    MCP-->>SK: Returns data to Semantic Kernel
+    SK-->>HUB: LLM formats response into natural language table
+    HUB->>UI: SignalR ReceiveMessage(answer, "MCP")
+    UI-->>User: Renders formatted table & "MCP" badge
+```
+
+---
+
+#### 📚 Scenario B: Medical Literature & Guidelines Search (RAG)
+**User Prompt:** *"What are the clinical guidelines for managing Type 2 Diabetes?"*
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as Angular Chat UI
+    participant GW as YARP Gateway
+    participant HUB as Orchestrator ChatHub
+    participant SK as Semantic Kernel & Filter
+    participant RAG_P as ClinicalGuidelinesPlugin
+    participant RAG_API as RagService.Api
+    participant DB as pgvector Database
+    participant LLM as OpenRouter LLM
+
+    User->>UI: Types "What are the clinical guidelines for Type 2 Diabetes?"
+    UI->>GW: SignalR WebSocket SendMessage(userId, role, message)
+    GW->>HUB: Forwards to /orchestrator/chatHub
+    HUB->>SK: InvokePromptAsync(prompt)
+    SK->>SK: LLM infers tool: ClinicalGuidelinesPlugin.QueryGuidelinesAsync
+    SK->>SK: PluginTrackingFilter records "RAG"
+    SK->>RAG_P: Executes QueryGuidelinesAsync("Type 2 Diabetes guidelines")
+    RAG_P->>RAG_API: HTTP POST http://ragservice-api:8080/rag/query
+    RAG_API->>LLM: Generates vector embedding for prompt query
+    LLM-->>RAG_API: Returns 384-float vector array
+    RAG_API->>DB: Cosine Distance Search on DocumentChunk vector embeddings
+    DB-->>RAG_API: Returns top K relevant medical context chunks
+    RAG_API->>LLM: Generates grounded response using retrieved context
+    LLM-->>RAG_API: Returns answer with citations
+    RAG_API-->>RAG_P: Returns RagQueryResponse payload
+    RAG_P-->>SK: Returns guideline context to Semantic Kernel
+    SK-->>HUB: Finalizes formatted answer
+    HUB->>UI: SignalR ReceiveMessage(answer, "RAG")
+    UI-->>User: Renders clinical recommendations & "RAG" badge
+```
+
+---
+
+#### ⚙️ Scenario C: Workflow Automation & Appointment Scheduling (MassTransit Sagas)
+**User Prompt:** *"Please schedule a cardiology appointment for patient p-123 next Monday."*
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as Angular Chat UI
+    participant GW as YARP Gateway
+    participant HUB as Orchestrator ChatHub
+    participant SK as Semantic Kernel & Filter
+    participant WF_P as WorkflowPlugin
+    participant WF_API as WorkflowEngine.Api
+    participant RMQ as RabbitMQ Broker
+    participant SAGA as AppointmentSchedulingSaga
+    participant DB as PostgreSQL (WorkflowDb)
+
+    User->>UI: Types "Schedule a cardiology appointment for p-123 next Monday"
+    UI->>GW: SignalR WebSocket SendMessage(userId, role, message)
+    GW->>HUB: Forwards to /orchestrator/chatHub
+    HUB->>SK: InvokePromptAsync(prompt)
+    SK->>SK: LLM infers tool: WorkflowPlugin.StartAppointmentWorkflowAsync
+    SK->>SK: PluginTrackingFilter records "Workflow"
+    SK->>WF_P: Executes StartAppointmentWorkflowAsync("p-123", "cardiology", "2026-08-31")
+    WF_P->>WF_API: HTTP POST http://workflowengine-api:8080/workflows/appointment/start
+    WF_API->>RMQ: Publishes StartAppointmentScheduling Event (CorrelationId)
+    RMQ->>SAGA: MassTransit triggers State Machine Saga
+    SAGA->>DB: Persists initial saga state to AppointmentSagaState table
+    WF_API-->>WF_P: Returns HTTP 202 Accepted { WorkflowId }
+    WF_P-->>SK: Returns Workflow confirmation details
+    SK-->>HUB: Finalizes response message
+    HUB->>UI: SignalR ReceiveMessage(answer, "Workflow")
+    UI-->>User: Renders workflow confirmation & "Workflow" badge
+```
+
+---
+
 ## 🛠️ Technologies Used
 
 ### Frontend
