@@ -348,3 +348,32 @@ To tear down the ecosystem and remove the containers, run:
 docker-compose down
 ```
 *(To wipe the PostgreSQL and RabbitMQ data volumes completely, append `-v`)*
+
+---
+
+## 📌 Future Roadmap & TODO Use Cases
+
+Here are planned and recommended AI Copilot capabilities to extend the healthcare microservices ecosystem:
+
+### 1. 📅 Advanced Appointment & Workflow Management
+- **Fetch Appointment Details**: Query upcoming or past appointment schedules for a patient (`GET /workflows/appointment/{patientId}`).
+- **Cancel or Reschedule Appointments**: Issue cancellation or rescheduling saga commands via MassTransit state machine (`POST /workflows/appointment/cancel`, `POST /workflows/appointment/reschedule`).
+- **Automated Patient Reminders**: Trigger automated SMS/Email notification workflows for upcoming visits or pre-op instructions.
+
+### 2. 💊 Pharmacy & Medication Automation
+- **Prescription Refill Requests**: Detect refill requests, verify current patient dosage from EMR via MCP, and route refill authorizations to clinicians.
+- **Drug Interaction & Allergy Checking**: Automatically cross-reference newly prescribed medications against patient allergy lists and active prescriptions before submitting orders.
+
+### 3. 📋 EHR & Clinical Records Capabilities
+- **Lab Trend Analysis & Insights**: Query historical lab results (e.g., 6-month HbA1c or lipid panel trends) and return formatted trend analysis reports.
+- **SOAP Note Summarization**: Synthesize raw patient encounter transcripts into structured Subjective, Objective, Assessment, and Plan (SOAP) clinical notes.
+- **Vitals & Telemetry Alerting**: Monitor real-time patient telemetry (BP, heart rate, oxygen saturation) and trigger urgent alert workflows for out-of-range values.
+
+### 4. 📚 Advanced RAG & Clinical Decision Support
+- **ICD-10 / CPT Billing Code Assistant**: Suggest appropriate medical billing diagnostic codes based on clinical encounter summaries.
+- **Medical PDF Report Ingestion**: Enable file upload (e.g., lab PDF results, discharge summaries), automatically extract text/OCR, and generate vector embeddings into `pgvector`.
+
+### 5. 🤝 Multi-Agent Collaboration & Governance
+- **Semantic Kernel `AgentGroupChat`**: Enable multi-agent consensus loops where `PatientRecordsAgent`, `ClinicalGuidelinesAgent`, and `WorkflowExecutionAgent` autonomously collaborate on complex cases.
+- **Role-Based Access Control (RBAC) & HIPAA Audit Logs**: Enforce strict data visibility (Doctor vs. Nurse vs. Patient) and log all agent function invocations into a compliance audit table.
+
