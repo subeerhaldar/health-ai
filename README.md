@@ -342,6 +342,83 @@ docker exec -it postgres psql -U healthai -d healthai_db -c "SELECT * FROM \"App
 
 ---
 
+## 🧪 Individual Component & Tool Testing Guide
+
+Follow these steps to test each microservice, tool, and database component independently:
+
+### 🏥 1. Testing MCP (Hospital System Connectors)
+The MCP Client service aggregates data across EMR, LIS, PACS, RIS, CRM, and Billing stubs:
+- **Swagger UI:** [http://localhost:5003/swagger](http://localhost:5003/swagger)
+- **Test EMR Patient Record Aggregation:**
+  ```powershell
+  Invoke-RestMethod -Uri "http://localhost:5000/mcp/patient-records/p-123" -Method Get
+  ```
+- **Test LIS Lab Results Aggregation:**
+  ```powershell
+  Invoke-RestMethod -Uri "http://localhost:5000/mcp/lab-results/p-123" -Method Get
+  ```
+- **Test PACS / RIS Imaging Records:**
+  ```powershell
+  Invoke-RestMethod -Uri "http://localhost:5000/mcp/imaging/p-123" -Method Get
+  ```
+
+---
+
+### 🐇 2. Testing RabbitMQ & MassTransit Workflow Sagas
+MassTransit handles event-driven state machine sagas via RabbitMQ message broker:
+1. **Open RabbitMQ Management Dashboard:**
+   - **URL:** [http://localhost:15672](http://localhost:15672) (Login: `guest` / `guest`)
+   - Check the **Exchanges** tab for `Shared.Contracts.Messages:StartAppointmentScheduling`.
+   - Check the **Queues** tab for `AppointmentSagaState` and `NotificationServiceStub`.
+2. **Trigger Appointment Scheduling Saga (POST Request):**
+   ```powershell
+   $body = @{ patientId = "p-123"; providerId = "Dr. Smith"; requestedDate = "2026-08-31T09:00:00Z" } | ConvertTo-Json
+   Invoke-RestMethod -Uri "http://localhost:5000/workflows/appointment/start" -Method Post -Body $body -ContentType "application/json"
+   ```
+3. **Verify Saga State Persistence in PostgreSQL:**
+   ```powershell
+   docker exec -it postgres psql -U healthai -d healthai_db -c "SELECT * FROM \"AppointmentSagaState\";"
+   ```
+4. **Query Workflow Status via API:**
+   ```powershell
+   Invoke-RestMethod -Uri "http://localhost:5000/workflows/{WORKFLOW_ID}/status" -Method Get
+   ```
+
+---
+
+### 📚 3. Testing RAG Service (`pgvector` Vector Search)
+- **Swagger UI:** [http://localhost:5002/swagger](http://localhost:5002/swagger)
+- **Test Vector Distance Search via API:**
+  ```powershell
+  $body = @{ query = "What are the clinical guidelines for Type 2 Diabetes?"; topK = 3 } | ConvertTo-Json
+  Invoke-RestMethod -Uri "http://localhost:5000/rag/query" -Method Post -Body $body -ContentType "application/json"
+  ```
+- **Inspect Seeded Document Chunks in Database:**
+  ```powershell
+  docker exec -it postgres psql -U healthai -d healthai_db -c "SELECT \"Id\", \"Title\" FROM \"Documents\";"
+  ```
+
+---
+
+### 🧠 4. Testing Orchestrator API & Semantic Kernel Agents
+- **Swagger UI:** [http://localhost:5001/swagger](http://localhost:5001/swagger)
+- **Health Check Endpoint:** [http://localhost:5001/health](http://localhost:5001/health)
+- **SignalR Real-Time ChatHub:** Connect via [http://localhost:4200](http://localhost:4200) to test prompt routing across `PatientRecordsAgent`, `ClinicalGuidelinesAgent`, and `WorkflowExecutionAgent`.
+
+---
+
+### 🌐 5. Quick Link Cheat Sheet
+
+- 🖥️ **Angular UI:** [http://localhost:4200](http://localhost:4200)
+- 🌐 **YARP Gateway:** [http://localhost:5000](http://localhost:5000)
+- 🧠 **Orchestrator API:** [http://localhost:5001/swagger](http://localhost:5001/swagger)
+- 📚 **RAG Service API:** [http://localhost:5002/swagger](http://localhost:5002/swagger)
+- 🏥 **MCP Client API:** [http://localhost:5003/swagger](http://localhost:5003/swagger)
+- ⚙️ **Workflow Engine API:** [http://localhost:5004/swagger](http://localhost:5004/swagger)
+- 🐇 **RabbitMQ Dashboard:** [http://localhost:15672](http://localhost:15672) (`guest` / `guest`)
+
+---
+
 ## 🛑 Shutting Down
 To tear down the ecosystem and remove the containers, run:
 ```bash
